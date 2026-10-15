@@ -1,0 +1,473 @@
+{
+  "id": "exaae58d3a81e85a",
+  "name": "Example 01 - Support Agent with Simple RAG",
+  "nodes": [
+    {
+      "id": "93dcc01c-d707-5f75-96c6-68837c24ede6",
+      "name": "Incoming Message",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "support-example",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "fe0049bd-3ffd-54e1-8c5b-a5fcf6869886",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e5978b69-72e3-5d84-b8d5-67a7b9f04021",
+              "name": "message",
+              "value": "={{ String($json.body.message || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "b5d7c18e-ba66-5911-8495-4c6cdea1dc37",
+              "name": "sessionId",
+              "value": "={{ String($json.body.sessionId || 'demo-session') }}",
+              "type": "string"
+            },
+            {
+              "id": "5f4181a1-dcc5-50d7-9e24-dd5a62e92a2e",
+              "name": "callbackUrl",
+              "value": "={{ $json.body.callbackUrl || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c559d452-626f-5bad-8323-4943b8a40d74",
+      "name": "Has Text?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "74800430-64e4-5860-9853-94955d3a7d6f",
+              "leftValue": "={{ $json.message }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "713b5643-f151-59cd-ae45-82a3be6362f6",
+      "name": "Short Pause",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "779bae81-a8c7-5c9d-a8b7-2a3f8c21e02a",
+      "name": "Support Assistant",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        880,
+        200
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Normalize Input').item.json.message }}",
+        "options": {
+          "systemMessage": "You are a friendly assistant for a fictional online store called Example Shop. Answer short questions about shipping and returns. Use the knowledge base tool when it helps. If you do not know the answer, say so politely."
+        }
+      }
+    },
+    {
+      "id": "4b93c8b4-cd3c-51e7-9045-b6d0e011e62c",
+      "name": "Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        780,
+        440
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      }
+    },
+    {
+      "id": "d2b86246-e9d7-563e-a0ab-f4b46c7c1f20",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        940,
+        440
+      ],
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Normalize Input').item.json.sessionId }}",
+        "contextWindowLength": 6
+      }
+    },
+    {
+      "id": "157e133b-d24f-5e8f-b26f-13aa8cc1f3ed",
+      "name": "FAQ Lookup",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.3,
+      "position": [
+        1100,
+        440
+      ],
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Look up answers about shipping and returns for the fictional shop.",
+        "memoryKey": {
+          "__rl": true,
+          "value": "demo_faq_store",
+          "mode": "list",
+          "cachedResultName": "demo_faq_store"
+        },
+        "topK": 3
+      }
+    },
+    {
+      "id": "ea6e5050-4013-5866-a0e0-e26f25827717",
+      "name": "Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        640
+      ],
+      "parameters": {
+        "model": "text-embedding-3-small",
+        "options": {}
+      }
+    },
+    {
+      "id": "d50ebb2b-06f1-573e-b2bd-dad500542bd0",
+      "name": "Deliver Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Normalize Input').item.json.callbackUrl || 'https://example.com/replace-me' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sessionId: $('Normalize Input').item.json.sessionId, reply: $json.output }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "5526de10-4876-58b1-8029-961df3dd9bfc",
+      "name": "Reply to Caller",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1420,
+        200
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ reply: $('Support Assistant').item.json.output }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "84a86a69-121e-5d7b-b540-18cbb84b45db",
+      "name": "Reject Empty",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        420
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'message is required' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
+      "id": "781a4f4a-9e6c-52f0-910b-b9c46d9772ac",
+      "name": "Run Once: Load Sample FAQ",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        760
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "97588cfb-0131-5546-aa5f-54d7ddf3da98",
+      "name": "Sample FAQ Text",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        760
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6f70fba2-d564-5616-990f-f9578d6695fa",
+              "name": "text",
+              "value": "Example Shop ships orders within 3 business days. Returns are accepted within 30 days if the item is unused. Refunds are issued to the original payment method.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ad41f59c-d1d0-5d69-a127-b7c28e64eb32",
+      "name": "Store Sample FAQ",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.3,
+      "position": [
+        440,
+        760
+      ],
+      "parameters": {
+        "mode": "insert",
+        "memoryKey": {
+          "__rl": true,
+          "value": "demo_faq_store",
+          "mode": "list",
+          "cachedResultName": "demo_faq_store"
+        },
+        "clearStore": true
+      }
+    },
+    {
+      "id": "1fa8a00b-c18d-55dc-9fee-dc1269c1f3b5",
+      "name": "FAQ Document Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1,
+      "position": [
+        500,
+        960
+      ],
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.text }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Incoming Message": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Has Text?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Text?": {
+      "main": [
+        [
+          {
+            "node": "Short Pause",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Short Pause": {
+      "main": [
+        [
+          {
+            "node": "Support Assistant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Support Assistant": {
+      "main": [
+        [
+          {
+            "node": "Deliver Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deliver Reply": {
+      "main": [
+        [
+          {
+            "node": "Reply to Caller",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Support Assistant",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Support Assistant",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAQ Lookup": {
+      "ai_tool": [
+        [
+          {
+            "node": "Support Assistant",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "FAQ Lookup",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Store Sample FAQ",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Once: Load Sample FAQ": {
+      "main": [
+        [
+          {
+            "node": "Sample FAQ Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sample FAQ Text": {
+      "main": [
+        [
+          {
+            "node": "Store Sample FAQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAQ Document Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Store Sample FAQ",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

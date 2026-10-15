@@ -1,0 +1,606 @@
+{
+  "id": "ex19068043dadb5b",
+  "name": "Example 02 - Enrollment and Visit Scheduling",
+  "nodes": [
+    {
+      "id": "93dcc01c-d707-5f75-96c6-68837c24ede6",
+      "name": "Incoming Message",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "enrollment-example",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "fe0049bd-3ffd-54e1-8c5b-a5fcf6869886",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e5978b69-72e3-5d84-b8d5-67a7b9f04021",
+              "name": "message",
+              "value": "={{ String($json.body.message || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "b5d7c18e-ba66-5911-8495-4c6cdea1dc37",
+              "name": "sessionId",
+              "value": "={{ String($json.body.sessionId || 'demo-session') }}",
+              "type": "string"
+            },
+            {
+              "id": "ec63377f-9790-5f36-9c3b-cba872464624",
+              "name": "requestedSlot",
+              "value": "={{ String($json.body.requestedSlot || '') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "06ccd980-821c-5a30-804e-59096f4c562b",
+      "name": "Route by Topic",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "aec0c786-55f9-56c6-a58d-aac6f9f647f7",
+                    "leftValue": "={{ $json.message }}",
+                    "rightValue": "enroll",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "enrollment"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "cd5aee93-b292-56ab-b3c8-c6ecea577b5c",
+                    "leftValue": "={{ $json.message }}",
+                    "rightValue": "visit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "visit"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "other"
+        }
+      }
+    },
+    {
+      "id": "ebc8be29-fea8-5f49-b4b8-13021378d86d",
+      "name": "Admissions Assistant",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        700,
+        200
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Normalize Input').item.json.message }}",
+        "options": {
+          "systemMessage": "You are a helpful assistant for a fictional school called Example Academy. Help families with enrollment questions and visit requests. Ask for the child's age group and a preferred time slot, one question at a time. Keep answers short and polite."
+        }
+      }
+    },
+    {
+      "id": "4b93c8b4-cd3c-51e7-9045-b6d0e011e62c",
+      "name": "Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        600,
+        440
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      }
+    },
+    {
+      "id": "d2b86246-e9d7-563e-a0ab-f4b46c7c1f20",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        800,
+        440
+      ],
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Normalize Input').item.json.sessionId }}",
+        "contextWindowLength": 6
+      }
+    },
+    {
+      "id": "71468e39-672f-5baa-9b27-21e1205b3e0c",
+      "name": "Simulated Slot Check",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        960,
+        200
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "797789c3-878d-5685-b163-3ed767502ac0",
+              "name": "reply",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            },
+            {
+              "id": "a51f7e0c-dcc8-55d1-bddf-362e983f34a8",
+              "name": "requestedSlot",
+              "value": "={{ $('Normalize Input').item.json.requestedSlot }}",
+              "type": "string"
+            },
+            {
+              "id": "7ee0d65a-4393-502c-a19b-e4242634c9a9",
+              "name": "sampleOpenSlots",
+              "value": "Monday 10:00,Tuesday 14:00,Thursday 09:00",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "cb61e9bc-d222-5d2f-917d-c02a415f4a58",
+      "name": "Slot Open?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "95911c02-3c3e-598b-baa0-12cfb4e54d96",
+              "leftValue": "={{ $json.sampleOpenSlots.split(',').includes($json.requestedSlot) }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "299ab468-96a3-56cf-bb4c-e1c3e6b10ec4",
+      "name": "Confirm Visit",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1400,
+        100
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d453cb74-45cc-5732-a69c-fc8c8f197a6f",
+              "name": "reply",
+              "value": "={{ $json.reply + ' Your visit is confirmed for ' + $json.requestedSlot + ' (simulated).' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b862631b-1780-52e8-a1ff-6cc0d49bb64c",
+      "name": "Offer Alternatives",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1400,
+        320
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d453cb74-45cc-5732-a69c-fc8c8f197a6f",
+              "name": "reply",
+              "value": "={{ $json.reply + ' That time is not available. Open slots: ' + $json.sampleOpenSlots + '.' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "53243de0-1fe4-54ed-a675-756e0f15c8e4",
+      "name": "Generic Reply",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        700,
+        620
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "862a3eb1-7d99-5397-8d33-25f63cb8ecec",
+              "name": "reply",
+              "value": "Thanks for your message. Ask me about enrollment or request a visit.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5526de10-4876-58b1-8029-961df3dd9bfc",
+      "name": "Reply to Caller",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1640,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ reply: $json.reply }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "b0c04c95-5fc9-5cc6-84b7-9dc4a8e97976",
+      "name": "Daily Reminder Timer",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        900
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "121b89d7-6695-554f-8eab-0b31505b93bd",
+      "name": "Sample Appointment",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        900
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8bc3e4a9-81d3-5ff7-8ce5-b857d55190ec",
+              "name": "guardianName",
+              "value": "Sample Guardian",
+              "type": "string"
+            },
+            {
+              "id": "27ef17a7-a48c-5e17-8af7-ceb4584bc467",
+              "name": "slot",
+              "value": "Tuesday 14:00",
+              "type": "string"
+            },
+            {
+              "id": "f8e28671-c7a0-54fb-896f-6acb173605cb",
+              "name": "callbackUrl",
+              "value": "https://example.com/replace-me",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "97aa6d3f-d28e-58bb-b725-bdb63e65fe5c",
+      "name": "Reminder Text",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        460,
+        900
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "947170b4-6151-5e77-9aeb-a5bb27553961",
+              "name": "reminder",
+              "value": "={{ 'Hello ' + $json.guardianName + ', this is a reminder of your visit on ' + $json.slot + '.' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5c120b37-ee51-508a-b4d6-ad3f048cded2",
+      "name": "Send Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        900
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Sample Appointment').item.json.callbackUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.reminder }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Incoming Message": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Route by Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Topic": {
+      "main": [
+        [
+          {
+            "node": "Admissions Assistant",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Admissions Assistant",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generic Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Admissions Assistant": {
+      "main": [
+        [
+          {
+            "node": "Simulated Slot Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulated Slot Check": {
+      "main": [
+        [
+          {
+            "node": "Slot Open?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slot Open?": {
+      "main": [
+        [
+          {
+            "node": "Confirm Visit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Offer Alternatives",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Visit": {
+      "main": [
+        [
+          {
+            "node": "Reply to Caller",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Offer Alternatives": {
+      "main": [
+        [
+          {
+            "node": "Reply to Caller",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generic Reply": {
+      "main": [
+        [
+          {
+            "node": "Reply to Caller",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Admissions Assistant",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Admissions Assistant",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Reminder Timer": {
+      "main": [
+        [
+          {
+            "node": "Sample Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sample Appointment": {
+      "main": [
+        [
+          {
+            "node": "Reminder Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reminder Text": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
